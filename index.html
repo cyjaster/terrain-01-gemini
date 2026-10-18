@@ -1,0 +1,2864 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TERRAIN / 01 — 山地聚落生长实验室</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+
+:root {
+  --bg-paper: #F3F2EE;
+  --bg-panel: rgba(243, 242, 238, 0.92);
+  --bg-card: #EAE8E1;
+  --ink-primary: #141413;
+  --ink-secondary: #575652;
+  --ink-muted: #8C8A84;
+  --line-hair: #D5D2C8;
+  --line-strong: #141413;
+  --swiss-red: #FF331F;
+  --swiss-red-dark: #D92311;
+  --slope-flat: #2B6E46;
+  --slope-mod: #D9822B;
+  --slope-steep: #E04F33;
+  --slope-cliff: #8C1D18;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-paper);
+  color: var(--ink-primary);
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.font-mono-tech {
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: -0.01em;
+}
+
+/* Swiss Grid Layout */
+.lab-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 52px 1fr 38px;
+  background-color: var(--bg-paper);
+}
+
+/* Subtle architectural drafting grid background */
+.viewport-bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(20, 20, 19, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20, 20, 19, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Top Header Bar */
+.swiss-header {
+  z-index: 30;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  background: var(--bg-panel);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--ink-primary);
+}
+
+.header-cell {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-right: 1px solid var(--line-hair);
+}
+
+.header-cell:last-child {
+  border-right: none;
+}
+
+/* Main Workspace Area */
+.lab-main {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#canvas-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+#canvas-container:active {
+  cursor: grabbing;
+}
+
+/* Floating Swiss Instrument Panels */
+.instrument-panel {
+  position: absolute;
+  z-index: 20;
+  background: var(--bg-panel);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--ink-primary);
+  box-shadow: 0 10px 30px rgba(20, 20, 19, 0.06);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+}
+
+.panel-left {
+  top: 16px;
+  left: 16px;
+  bottom: 16px;
+  width: 288px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.panel-right {
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: 310px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom minimal scrollbar */
+.instrument-panel::-webkit-scrollbar {
+  width: 3px;
+}
+.instrument-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.instrument-panel::-webkit-scrollbar-thumb {
+  background: var(--line-hair);
+}
+.instrument-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-secondary);
+}
+
+.section-block {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-hair);
+}
+
+.section-block:last-child {
+  border-bottom: none;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.section-index {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--swiss-red);
+  letter-spacing: 0.06em;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-primary);
+}
+
+/* Custom Swiss Range Sliders */
+.param-row {
+  margin-bottom: 11px;
+}
+.param-row:last-child {
+  margin-bottom: 0;
+}
+
+.param-label-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+
+.param-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-primary);
+}
+
+.param-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ink-muted);
+  margin-left: 4px;
+}
+
+.param-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  background: var(--bg-card);
+  padding: 1px 5px;
+  border: 1px solid var(--line-hair);
+}
+
+input[type="range"].swiss-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"].swiss-slider:focus {
+  outline: none;
+}
+
+input[type="range"].swiss-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 2px;
+  background: var(--ink-primary);
+}
+
+input[type="range"].swiss-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  width: 8px;
+  background: var(--swiss-red);
+  border: 1px solid var(--ink-primary);
+  margin-top: -5px;
+  transition: transform 0.12s ease, background-color 0.12s ease;
+}
+
+input[type="range"].swiss-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: var(--ink-primary);
+}
+
+input[type="range"].swiss-slider::-moz-range-track {
+  width: 100%;
+  height: 2px;
+  background: var(--ink-primary);
+}
+
+input[type="range"].swiss-slider::-moz-range-thumb {
+  height: 12px;
+  width: 8px;
+  background: var(--swiss-red);
+  border: 1px solid var(--ink-primary);
+  border-radius: 0;
+}
+
+/* Swiss Buttons */
+.swiss-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 7px 10px;
+  border: 1px solid var(--ink-primary);
+  background: var(--bg-paper);
+  color: var(--ink-primary);
+  cursor: pointer;
+  transition: all 0.14s ease;
+  text-transform: uppercase;
+}
+
+.swiss-btn:hover {
+  background: var(--ink-primary);
+  color: var(--bg-paper);
+}
+
+.swiss-btn:active {
+  transform: translateY(1px);
+}
+
+.swiss-btn-primary {
+  background: var(--swiss-red);
+  color: #FFFFFF;
+  border-color: var(--ink-primary);
+}
+
+.swiss-btn-primary:hover {
+  background: var(--ink-primary);
+  color: #FFFFFF;
+}
+
+.swiss-btn-dark {
+  background: var(--ink-primary);
+  color: var(--bg-paper);
+}
+
+.swiss-btn-dark:hover {
+  background: var(--swiss-red);
+  color: #FFFFFF;
+}
+
+.swiss-btn.active {
+  background: var(--ink-primary);
+  color: var(--bg-paper);
+}
+
+.swiss-btn-accent.active {
+  background: var(--swiss-red);
+  color: #FFFFFF;
+  border-color: var(--ink-primary);
+}
+
+/* Archetype Grid Buttons */
+.archetype-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.archetype-btn {
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid var(--line-hair);
+  background: var(--bg-paper);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.archetype-btn:hover {
+  border-color: var(--ink-primary);
+}
+
+.archetype-btn.active {
+  border-color: var(--ink-primary);
+  background: var(--ink-primary);
+  color: var(--bg-paper);
+}
+
+.archetype-btn.active .arch-code {
+  color: var(--swiss-red);
+}
+
+.arch-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ink-muted);
+  display: block;
+}
+
+.arch-name {
+  font-size: 11px;
+  font-weight: 600;
+  display: block;
+}
+
+/* Telemetry Metric Grid */
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.metric-card {
+  background: var(--bg-card);
+  border: 1px solid var(--line-hair);
+  padding: 7px 9px;
+}
+
+.metric-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ink-secondary);
+  text-transform: uppercase;
+  display: block;
+}
+
+.metric-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin-top: 2px;
+  display: block;
+}
+
+.metric-unit {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--ink-secondary);
+}
+
+/* Viewport HUD Overlays (Crosshairs, Scale bar, Probe, Camera Bar) */
+.hud-overlay-top {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--ink-primary);
+  padding: 4px 6px;
+}
+
+.hud-cam-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.hud-cam-btn:hover {
+  color: var(--ink-primary);
+  border-color: var(--line-hair);
+}
+
+.hud-cam-btn.active {
+  background: var(--ink-primary);
+  color: var(--bg-paper);
+}
+
+.hud-overlay-bottom {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--bg-panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--ink-primary);
+  padding: 6px 14px;
+  pointer-events: none;
+}
+
+/* Architectural Scale Bar */
+.scale-bar-graphic {
+  display: flex;
+  align-items: center;
+  height: 6px;
+  border: 1px solid var(--ink-primary);
+}
+.scale-seg-dark {
+  width: 24px;
+  height: 100%;
+  background: var(--ink-primary);
+}
+.scale-seg-light {
+  width: 24px;
+  height: 100%;
+  background: transparent;
+}
+
+/* Corner Registration Marks */
+.reg-mark {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 12;
+}
+.reg-tl { top: 64px; left: 318px; border-top: 1px solid var(--ink-primary); border-left: 1px solid var(--ink-primary); }
+.reg-tr { top: 64px; right: 340px; border-top: 1px solid var(--ink-primary); border-right: 1px solid var(--ink-primary); }
+.reg-bl { bottom: 52px; left: 318px; border-bottom: 1px solid var(--ink-primary); border-left: 1px solid var(--ink-primary); }
+.reg-br { bottom: 52px; right: 340px; border-bottom: 1px solid var(--ink-primary); border-right: 1px solid var(--ink-primary); }
+
+/* Bottom Status Bar */
+.swiss-footer {
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--ink-primary);
+  padding: 0 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--ink-secondary);
+}
+
+/* Toast Notification */
+.swiss-toast {
+  position: fixed;
+  bottom: 54px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 60;
+  background: var(--ink-primary);
+  color: var(--bg-paper);
+  border: 1px solid var(--swiss-red);
+  padding: 8px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.swiss-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Slope Legend Bar */
+.slope-spectrum-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 8px;
+  border: 1px solid var(--ink-primary);
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+/* Responsive drawers for smaller screens */
+@media (max-width: 1024px) {
+  .panel-left {
+    width: 250px;
+  }
+  .panel-right {
+    width: 265px;
+  }
+  .reg-tl, .reg-tr, .reg-bl, .reg-br {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .panel-left {
+    top: auto;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 44vh;
+  }
+  .panel-right {
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    bottom: auto;
+    width: auto;
+    max-height: 36vh;
+  }
+  .panel-left.collapsed-mobile,
+  .panel-right.collapsed-mobile {
+    display: none;
+  }
+  .hud-overlay-top {
+    top: auto;
+    bottom: 46vh;
+  }
+  .hud-overlay-bottom {
+    display: none;
+  }
+}
+
+</style>
+</head>
+<body>
+  <div class="lab-shell">
+    <!-- ==================== TOP SWISS HEADER BAR ==================== -->
+    <header class="swiss-header">
+      <div class=" flex items-stretch">
+        <div class="header-cell gap-3">
+          <span class="inline-block w-3 h-3 bg-[#FF331F] border border-[#141413]"></span>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-mono-tech font-bold text-xs tracking-wider">TERRAIN / 01</span>
+              <span class="text-[11px] font-bold tracking-wide">山地聚落生长实验室</span>
+            </div>
+            <div class="font-mono-tech text-[9px] text-[#575652]">
+              MOUNTAIN SETTLEMENT GENERATIVE LABORATORY // SYS.VER 01.4
+            </div>
+          </div>
+        </div>
+
+        <div class="header-cell hidden md:flex flex-col justify-center">
+          <span class="font-mono-tech text-[9px] text-[#8C8A84]">DOMAIN SCALE // 物理尺度</span>
+          <span class="font-mono-tech text-[11px] font-semibold">220m × 220m [1:1000]</span>
+        </div>
+
+        <div class="header-cell hidden lg:flex flex-col justify-center">
+          <span class="font-mono-tech text-[9px] text-[#8C8A84]">SEED MATRIX // 演算种子</span>
+          <span id="header-seed-code" class="font-mono-tech text-[11px] font-semibold">T-4821 // S-9017</span>
+        </div>
+      </div>
+
+      <!-- Right Action Controls in Header -->
+      <div class="flex items-center gap-2 px-3">
+        <button id="btn-mobile-terrain" class="swiss-btn md:hidden" title="地形面板">
+          <span>地形</span>
+        </button>
+        <button id="btn-mobile-settlement" class="swiss-btn md:hidden" title="聚落参数">
+          <span>参数</span>
+        </button>
+
+        <button id="btn-replay-growth" class="swiss-btn hidden sm:inline-flex" title="重播建筑生长动画">
+          <span class="w-1.5 h-1.5 bg-[#141413] inline-block"></span>
+          <span>生长动画 / GROW</span>
+        </button>
+
+        <button id="btn-remix-settlement" class="swiss-btn swiss-btn-primary" title="保持当前约束条件重新生成聚落布局">
+          <span>REMIX / 重新生成聚落</span>
+        </button>
+
+        <button id="btn-export-png" class="swiss-btn swiss-btn-dark" title="导出带瑞士图框的高清三维分析图纸">
+          <span>CAPTURE / 导出图纸</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ==================== CENTRAL 3D WORKSPACE ==================== -->
+    <main class="lab-main viewport-bg-grid">
+      <!-- Three.js WebGL Canvas Container -->
+      <div id="canvas-container" aria-label="三维山地聚落交互视口"></div>
+
+      <!-- Swiss Registration Crosshair Marks -->
+      <div class="reg-mark reg-tl"></div>
+      <div class="reg-mark reg-tr"></div>
+      <div class="reg-mark reg-bl"></div>
+      <div class="reg-mark reg-br"></div>
+
+      <!-- Top Viewport Camera Preset Switcher -->
+      <div class="hud-overlay-top">
+        <span class="font-mono-tech text-[9px] text-[#575652] px-1.5">VIEW // 视角</span>
+        <button class="hud-cam-btn active" data-cam="iso">ISO [轴测]</button>
+        <button class="hud-cam-btn" data-cam="top">TOP [顶视等高]</button>
+        <button class="hud-cam-btn" data-cam="elev">ELEV [立面剖视]</button>
+        <button class="hud-cam-btn" data-cam="persp">PERSP [近景透视]</button>
+      </div>
+
+      <!-- Bottom Viewport Scale Bar & Telemetry Legend -->
+      <div class="hud-overlay-bottom">
+        <div class="flex items-center gap-2">
+          <span class="font-mono-tech text-[10px] font-semibold">SCALE 1:1000</span>
+          <div class="scale-bar-graphic">
+            <div class="scale-seg-dark"></div>
+            <div class="scale-seg-light"></div>
+            <div class="scale-seg-dark"></div>
+            <div class="scale-seg-light"></div>
+          </div>
+          <span class="font-mono-tech text-[9px] text-[#575652]">0 — 20 — 40m</span>
+        </div>
+
+        <div class="h-3 w-[1px] bg-[#D5D2C8]"></div>
+
+        <div class="flex items-center gap-3 font-mono-tech text-[10px]">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 bg-[#FCFBF9] border border-[#141413] inline-block"></span>
+            <span>山地聚落体块</span>
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 bg-[#FF331F] inline-block"></span>
+            <span>核心锚点与栈道</span>
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-3 h-[1.5px] bg-[#141413] inline-block"></span>
+            <span>2m / 10m 等高线</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- ==================== LEFT PANEL: TERRAIN & SLOPE ANALYSIS ==================== -->
+      <aside id="panel-left" class="instrument-panel panel-left">
+        <!-- 01 / Topographic Synthesis -->
+        <div class="section-block">
+          <div class="section-header">
+            <span class="section-title">地形生成 // TOPOGRAPHY</span>
+            <span class="section-index">01 / DEM</span>
+          </div>
+
+          <div class="mb-3">
+            <div class="font-mono-tech text-[9px] text-[#575652] mb-1.5">TERRAIN ARCHETYPE // 地貌原型</div>
+            <div class="archetype-grid">
+              <button class="archetype-btn active" data-archetype="alpine">
+                <span class="arch-code">ARCH / 01</span>
+                <span class="arch-name">高山脊谷</span>
+              </button>
+              <button class="archetype-btn" data-archetype="canyon">
+                <span class="arch-code">ARCH / 02</span>
+                <span class="arch-name">台地峡谷</span>
+              </button>
+              <button class="archetype-btn" data-archetype="basin">
+                <span class="arch-code">ARCH / 03</span>
+                <span class="arch-name">双峰盆地</span>
+              </button>
+              <button class="archetype-btn" data-archetype="foothills">
+                <span class="arch-code">ARCH / 04</span>
+                <span class="arch-name">缓坡丘陵</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="param-row">
+            <div class="param-label-line">
+              <div>
+                <span class="param-name">地形起伏度</span>
+                <span class="param-sub">RELIEF AMPLITUDE</span>
+              </div>
+              <span id="val-relief" class="param-val">46 m</span>
+            </div>
+            <input id="slider-relief" type="range" min="16" max="78" step="1" value="46" class="swiss-slider" />
+          </div>
+
+          <div class="param-row">
+            <div class="param-label-line">
+              <div>
+                <span class="param-name">地貌肌理复杂度</span>
+                <span class="param-sub">FRACTAL ROUGHNESS</span>
+              </div>
+              <span id="val-roughness" class="param-val">0.52</span>
+            </div>
+            <input id="slider-roughness" type="range" min="0.22" max="0.82" step="0.02" value="0.52" class="swiss-slider" />
+          </div>
+
+          <button id="btn-new-terrain" class="swiss-btn w-full mt-2">
+            <span>NEW TERRAIN / 重新生成山地</span>
+          </button>
+        </div>
+
+        <!-- 02 / Slope Diagnostic Analysis -->
+        <div class="section-block">
+          <div class="section-header">
+            <span class="section-title">坡度分析 // SLOPE ANALYSIS</span>
+            <span class="section-index">02 / GIS</span>
+          </div>
+
+          <button id="btn-slope-analysis" class="swiss-btn swiss-btn-accent w-full justify-between px-3 mb-2.5">
+            <span>坡度色彩分析 / SLOPE MAP</span>
+            <span id="slope-mode-badge" class="font-mono-tech text-[10px]">OFF [关闭]</span>
+          </button>
+
+          <!-- Slope Color Spectrum Legend -->
+          <div class="slope-spectrum-bar">
+            <div style="background: #D5E3D8" title="0° - 12° 平缓适宜区"></div>
+            <div style="background: #E9C46A" title="12° - 24° 退台适宜区"></div>
+            <div style="background: #E76F51" title="24° - 35° 陡坡限制区"></div>
+            <div style="background: #9B2226" title="> 35° 悬崖禁建区"></div>
+          </div>
+          <div class="flex justify-between font-mono-tech text-[9px] text-[#575652] mt-1 mb-2.5">
+            <span>0°–12° 缓坡</span>
+            <span>12°–24° 中坡</span>
+            <span>24°–35° 陡坡</span>
+            <span>&gt;35° 陡坎</span>
+          </div>
+
+          <!-- Real-time Slope Distribution Histogram -->
+          <div class="space-y-1.5 font-mono-tech text-[10px]">
+            <div class="flex items-center gap-2">
+              <span class="w-16 text-[#575652]">&lt; 12° 平缓</span>
+              <div class="flex-1 h-2 bg-[#EAE8E1] border border-[#D5D2C8]">
+                <div id="slope-bar-0" class="h-full bg-[#2B6E46]" style="width: 28%"></div>
+              </div>
+              <span id="slope-pct-0" class="w-8 text-right">28%</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-16 text-[#575652]">12°–24°</span>
+              <div class="flex-1 h-2 bg-[#EAE8E1] border border-[#D5D2C8]">
+                <div id="slope-bar-1" class="h-full bg-[#D9822B]" style="width: 42%"></div>
+              </div>
+              <span id="slope-pct-1" class="w-8 text-right">42%</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-16 text-[#575652]">24°–35°</span>
+              <div class="flex-1 h-2 bg-[#EAE8E1] border border-[#D5D2C8]">
+                <div id="slope-bar-2" class="h-full bg-[#E04F33]" style="width: 20%"></div>
+              </div>
+              <span id="slope-pct-2" class="w-8 text-right">20%</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-16 text-[#575652]">&gt; 35° 陡崖</span>
+              <div class="flex-1 h-2 bg-[#EAE8E1] border border-[#D5D2C8]">
+                <div id="slope-bar-3" class="h-full bg-[#8C1D18]" style="width: 10%"></div>
+              </div>
+              <span id="slope-pct-3" class="w-8 text-right">10%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 03 / Layer Display Controls -->
+        <div class="section-block">
+          <div class="section-header">
+            <span class="section-title">图层控制 // DISPLAY LAYERS</span>
+            <span class="section-index">03 / VIS</span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-1.5">
+            <button id="btn-toggle-contours" class="swiss-btn active text-[10px] py-1.5">
+              <span>等高线</span>
+            </button>
+            <button id="btn-toggle-wireframe" class="swiss-btn active text-[10px] py-1.5">
+              <span>网格面</span>
+            </button>
+            <button id="btn-toggle-walkways" class="swiss-btn active text-[10px] py-1.5">
+              <span>聚落栈道</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ==================== RIGHT PANEL: SETTLEMENT PARAMETERS & TELEMETRY ==================== -->
+      <aside id="panel-right" class="instrument-panel panel-right">
+        <!-- 04 / Settlement Generative Parameters -->
+        <div class="section-block">
+          <div class="section-header">
+            <span class="section-title">聚落生成参数 // CONSTRAINTS</span>
+            <span class="section-index">04 / GEN</span>
+          </div>
+
+          <div class="param-row">
+            <div class="param-label-line">
+              <div>
+                <span class="param-name">最大允许坡度</span>
+                <span class="param-sub">MAX SLOPE THRESHOLD</span>
+              </div>
+              <span id="val-max-slope" class="param-val">24°</span>
+            </div>
+            <input id="slider-max-slope" type="range" min="8" max="42" step="1" value="24" class="swiss-slider" />
+          </div>
+
+          <div class="param-row">
+            <div class="param-label-line">
+              <div>
+                <span class="param-name">目标建筑数量</span>
+                <span class="param-sub">TARGET BUILDING UNITS</span>
+              </div>
+              <span id="val-target-count" class="param-val">72</span>
+            </div>
+            <input id="slider-target-count" type="range" min="10" max="150" step="2" value="72" class="swiss-slider" />
+          </div>
+
+          <div class="param-row">
+            <div class="param-label-line">
+              <div>
+                <span class="param-name">建筑最小间距</span>
+                <span class="param-sub">MIN SPACING CLEARANCE</span>
+              </div>
+              <span id="val-min-spacing" class="param-val">9.5 m</span>
+            </div>
+            <input id="slider-min-spacing" type="range" min="4.5" max="22.0" step="0.5" value="9.5" class="swiss-slider" />
+          </div>
+
+          <div class="param-row">
+            <div class="param-label-line">
+              <div>
+                <span class="param-name">聚落聚集密度</span>
+                <span class="param-sub">CLUSTER COHESION</span>
+              </div>
+              <span id="val-cluster-density" class="param-val">0.68</span>
+            </div>
+            <input id="slider-cluster-density" type="range" min="0.10" max="1.00" step="0.02" value="0.68" class="swiss-slider" />
+          </div>
+        </div>
+
+        <!-- 05 / Live Architectural Telemetry -->
+        <div class="section-block">
+          <div class="section-header">
+            <span class="section-title">实验数据监测 // TELEMETRY</span>
+            <span class="section-index">05 / DATA</span>
+          </div>
+
+          <div class="metric-grid mb-2.5">
+            <div class="metric-card">
+              <span class="metric-label">SETTLED // 实建数量</span>
+              <span class="metric-value">
+                <span id="metric-settled-count">72</span>
+                <span class="metric-unit">UNITS</span>
+              </span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">BUILDABLE // 适建占比</span>
+              <span id="metric-buildable-area" class="metric-value">68.4%</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">MEAN SLOPE // 聚落均坡</span>
+              <span id="metric-avg-slope" class="metric-value">14.2°</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">ELEV // 海拔跨度</span>
+              <span id="metric-elev-range" class="metric-value">2–46m</span>
+            </div>
+          </div>
+
+          <!-- Dynamic Growth Progress Indicator -->
+          <div class="bg-[#EAE8E1] border border-[#D5D2C8] p-2">
+            <div class="flex justify-between font-mono-tech text-[9px] mb-1">
+              <span class="text-[#575652]">GROWTH PHASE // 生长序列</span>
+              <span id="growth-status-text" class="font-semibold">COMPLETE</span>
+            </div>
+            <div class="w-full h-1.5 bg-[#D5D2C8]">
+              <div id="growth-progress-bar" class="h-full bg-[#FF331F] transition-all duration-75" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 06 / Architectural Massing Typologies -->
+        <div class="section-block">
+          <div class="section-header">
+            <span class="section-title">山地建筑原型 // TYPOLOGIES</span>
+            <span class="section-index">06 / MASS</span>
+          </div>
+
+          <div class="space-y-1.5 text-[11px]">
+            <div class="flex items-center justify-between py-1 border-b border-[#D5D2C8]">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 bg-[#FF331F] inline-block"></span>
+                <span>TYPE-A 聚落核心塔台</span>
+              </div>
+              <span id="typo-count-a" class="font-mono-tech text-[10px] font-semibold">3 栋</span>
+            </div>
+            <div class="flex items-center justify-between py-1 border-b border-[#D5D2C8]">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 bg-[#FCFBF9] border border-[#141413] inline-block"></span>
+                <span>TYPE-B 山地合院单元 (&lt;11°)</span>
+              </div>
+              <span id="typo-count-b" class="font-mono-tech text-[10px] font-semibold">18 栋</span>
+            </div>
+            <div class="flex items-center justify-between py-1 border-b border-[#D5D2C8]">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 bg-[#EAE8E1] border border-[#141413] inline-block"></span>
+                <span>TYPE-C 顺等高线退台住宅</span>
+              </div>
+              <span id="typo-count-c" class="font-mono-tech text-[10px] font-semibold">26 栋</span>
+            </div>
+            <div class="flex items-center justify-between py-1 border-b border-[#D5D2C8]">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 bg-[#575652] inline-block"></span>
+                <span>TYPE-D 悬挑长廊建筑</span>
+              </div>
+              <span id="typo-count-d" class="font-mono-tech text-[10px] font-semibold">14 栋</span>
+            </div>
+            <div class="flex items-center justify-between py-1">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 bg-[#141413] inline-block"></span>
+                <span>TYPE-E 陡坡吊脚塔楼</span>
+              </div>
+              <span id="typo-count-e" class="font-mono-tech text-[10px] font-semibold">11 栋</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- ==================== BOTTOM SWISS STATUS BAR ==================== -->
+    <footer class="swiss-footer">
+      <div class="flex items-center gap-4 truncate">
+        <span class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-[#FF331F] inline-block"></span>
+          <span id="hud-probe-readout">PROBE: 移动光标探测三维地形坐标、高程与实时坡度</span>
+        </span>
+      </div>
+
+      <div class="hidden sm:flex items-center gap-4 shrink-0">
+        <span id="hud-cam-coords">AZ 43° / ALT 34° / D 255m</span>
+        <span>左键旋转 · 右键/Shift平移 · 滚轮缩放</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Toast Feedback Notification -->
+  <div id="swiss-toast" class="swiss-toast" role="status" aria-live="polite"></div>
+
+  <script>
+/**
+ * TERRAIN / 01 — 山地聚落生长实验室
+ * Mountain Settlement Generative Laboratory
+ * Swiss International Typographic Style × Architectural Computation Instrument
+ */
+
+(function () {
+  'use strict';
+
+  // ============================================================================
+  // 1. SEEDED PRNG & FAST 2D SIMPLEX NOISE ENGINE
+  // ============================================================================
+  class SeededRandom {
+    constructor(seed = 104729) {
+      this.seed = seed >>> 0;
+    }
+    next() {
+      // Mulberry32 PRNG
+      let t = (this.seed += 0x6d2b79f5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+    range(min, max) {
+      return min + this.next() * (max - min);
+    }
+    int(min, max) {
+      return Math.floor(this.range(min, max + 1));
+    }
+  }
+
+  class SimplexNoise2D {
+    constructor(seed = 104729) {
+      const rng = new SeededRandom(seed);
+      this.p = new Uint8Array(256);
+      for (let i = 0; i < 256; i++) this.p[i] = i;
+      for (let i = 255; i > 0; i--) {
+        const j = Math.floor(rng.next() * (i + 1));
+        const tmp = this.p[i];
+        this.p[i] = this.p[j];
+        this.p[j] = tmp;
+      }
+      this.perm = new Uint8Array(512);
+      this.permMod12 = new Uint8Array(512);
+      for (let i = 0; i < 512; i++) {
+        this.perm[i] = this.p[i & 255];
+        this.permMod12[i] = this.perm[i] % 12;
+      }
+      this.grad3 = [
+        [1, 1], [-1, 1], [1, -1], [-1, -1],
+        [1, 0], [-1, 0], [0, 1], [0, -1],
+        [1, 1], [-1, 1], [1, -1], [-1, -1]
+      ];
+    }
+
+    noise2D(xin, yin) {
+      const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
+      const G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
+      let n0 = 0, n1 = 0, n2 = 0;
+
+      const s = (xin + yin) * F2;
+      const i = Math.floor(xin + s);
+      const j = Math.floor(yin + s);
+      const t = (i + j) * G2;
+      const X0 = i - t;
+      const Y0 = j - t;
+      const x0 = xin - X0;
+      const y0 = yin - Y0;
+
+      let i1, j1;
+      if (x0 > y0) { i1 = 1; j1 = 0; } else { i1 = 0; j1 = 1; }
+
+      const x1 = x0 - i1 + G2;
+      const y1 = y0 - j1 + G2;
+      const x2 = x0 - 1.0 + 2.0 * G2;
+      const y2 = y0 - 1.0 + 2.0 * G2;
+
+      const ii = i & 255;
+      const jj = j & 255;
+      const gi0 = this.permMod12[ii + this.perm[jj]];
+      const gi1 = this.permMod12[ii + i1 + this.perm[jj + j1]];
+      const gi2 = this.permMod12[ii + 1 + this.perm[jj + 1]];
+
+      let t0 = 0.5 - x0 * x0 - y0 * y0;
+      if (t0 >= 0) {
+        t0 *= t0;
+        n0 = t0 * t0 * (this.grad3[gi0][0] * x0 + this.grad3[gi0][1] * y0);
+      }
+      let t1 = 0.5 - x1 * x1 - y1 * y1;
+      if (t1 >= 0) {
+        t1 *= t1;
+        n1 = t1 * t1 * (this.grad3[gi1][0] * x1 + this.grad3[gi1][1] * y1);
+      }
+      let t2 = 0.5 - x2 * x2 - y2 * y2;
+      if (t2 >= 0) {
+        t2 *= t2;
+        n2 = t2 * t2 * (this.grad3[gi2][0] * x2 + this.grad3[gi2][1] * y2);
+      }
+      return 70.0 * (n0 + n1 + n2);
+    }
+  }
+
+  // ============================================================================
+  // 2. APPLICATION STATE & CONFIGURATION
+  // ============================================================================
+  const WORLD_SIZE = 220; // 220m x 220m physical domain
+  const GRID_RES = 128;   // 128 x 128 DEM cells (16,641 vertices)
+
+  const state = {
+    terrainSeed: 4821,
+    settlementSeed: 9017,
+    archetype: 'alpine',      // 'alpine' | 'canyon' | 'basin' | 'foothills'
+    relief: 46,               // Max elevation relief in meters (15 - 80)
+    roughness: 0.52,          // Fractal detail (0.20 - 0.90)
+    maxSlope: 24,             // Max buildable slope in degrees (8 - 42)
+    targetCount: 72,          // Target building count (10 - 150)
+    minSpacing: 9.5,          // Minimum spacing in meters (4.5 - 22.0)
+    clusterDensity: 0.68,     // Cluster cohesion (0.10 - 1.00)
+    slopeAnalysisMode: false, // Toggle slope analysis heatmap
+    showContours: true,       // Toggle contour lines
+    showWireframe: true,      // Toggle semi-transparent grid wireframe
+    showWalkways: true,       // Toggle elevated walkways between buildings
+    cameraPreset: 'iso',      // 'iso' | 'top' | 'elev' | 'persp'
+
+    // Runtime computed data
+    heightGrid: new Float32Array((GRID_RES + 1) * (GRID_RES + 1)),
+    slopeGrid: new Float32Array((GRID_RES + 1) * (GRID_RES + 1)),
+    aspectGrid: new Float32Array((GRID_RES + 1) * (GRID_RES + 1)),
+    minElev: 0,
+    maxElev: 46,
+    buildableRatio: 0,
+    slopeBuckets: [0, 0, 0, 0], // <12°, 12-24°, 24-35°, >35°
+    buildings: [],
+    walkways: [],
+    clusterCenters: [],
+
+    // Animation state
+    growthProgress: 0,
+    isGrowing: false,
+    growthStartTime: 0,
+    growthDuration: 2200 // ms
+  };
+
+  // ============================================================================
+  // 3. THREE.JS SCENE, CAMERA & CUSTOM DAMPED ORBIT CONTROLLER
+  // ============================================================================
+  let scene, renderer, perspCamera, activeCamera;
+  let terrainMesh, wireMesh, minorContourLines, majorContourLines;
+  let settlementGroup, walkwayGroup, axesGroup, probeMarkerGroup;
+  let raycaster, mouseNDC;
+
+  // Custom Damped Orbit Controller state (100% reliable without external plugin issues)
+  const orbit = {
+    theta: Math.PI * 0.24,      // Horizontal azimuth
+    phi: Math.PI * 0.31,        // Vertical polar angle from Y+
+    radius: 255,                // Distance from target
+    target: new THREE.Vector3(0, 12, 0),
+    targetTheta: Math.PI * 0.24,
+    targetPhi: Math.PI * 0.31,
+    targetRadius: 255,
+    targetLookAt: new THREE.Vector3(0, 12, 0),
+    isDragging: false,
+    dragMode: 'rotate',         // 'rotate' | 'pan'
+    lastX: 0,
+    lastY: 0
+  };
+
+  function initThreeScene() {
+    const container = document.getElementById('canvas-container');
+    const w = container.clientWidth || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf3f2ee);
+    scene.fog = new THREE.FogExp2(0xf3f2ee, 0.0014);
+
+    perspCamera = new THREE.PerspectiveCamera(36, w / h, 1, 1200);
+    activeCamera = perspCamera;
+
+    renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance'
+    });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.innerHTML = '';
+    container.appendChild(renderer.domElement);
+
+    // Architectural Studio Lighting
+    const ambientLight = new THREE.AmbientLight(0xf7f5f0, 0.72);
+    scene.add(ambientLight);
+
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xd8d4c8, 0.32);
+    hemiLight.position.set(0, 180, 0);
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfffdf8, 0.78);
+    sunLight.position.set(130, 195, 110);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 20;
+    sunLight.shadow.camera.far = 520;
+    const d = 145;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+
+    const fillLight = new THREE.DirectionalLight(0xe4e2dc, 0.28);
+    fillLight.position.set(-130, 90, -110);
+    scene.add(fillLight);
+
+    // Scene organizational groups
+    settlementGroup = new THREE.Group();
+    walkwayGroup = new THREE.Group();
+    axesGroup = new THREE.Group();
+    probeMarkerGroup = new THREE.Group();
+
+    scene.add(settlementGroup);
+    scene.add(walkwayGroup);
+    scene.add(axesGroup);
+    scene.add(probeMarkerGroup);
+
+    buildCoordinateFrameAndTicks();
+    buildProbeMarker();
+
+    raycaster = new THREE.Raycaster();
+    mouseNDC = new THREE.Vector2(-99, -99);
+
+    setupViewportInteractions(renderer.domElement);
+    window.addEventListener('resize', onWindowResize);
+  }
+
+  // ============================================================================
+  // 4. ARCHITECTURAL COORDINATE FRAME, BOUNDING BOX & PROBE MARKER
+  // ============================================================================
+  function buildCoordinateFrameAndTicks() {
+    axesGroup.clear();
+    const half = WORLD_SIZE / 2;
+
+    // Base plinth perimeter frame at Y = 0
+    const frameGeo = new THREE.BufferGeometry();
+    const pts = [
+      -half, 0, -half,  half, 0, -half,
+       half, 0, -half,  half, 0,  half,
+       half, 0,  half, -half, 0,  half,
+      -half, 0,  half, -half, 0, -half
+    ];
+
+    // Graduated tick marks along X and Z perimeter every 20m
+    for (let v = -half; v <= half; v += 20) {
+      const tickLen = (v % 40 === 0) ? 4.5 : 2.2;
+      // Front & back X ticks
+      pts.push(v, 0, half, v, 0, half + tickLen);
+      pts.push(v, 0, -half, v, 0, -half - tickLen);
+      // Left & right Z ticks
+      pts.push(half, 0, v, half + tickLen, 0, v);
+      pts.push(-half, 0, v, -half - tickLen, 0, v);
+    }
+
+    // Vertical elevation gauge pillar at (-half, 0..80, -half)
+    pts.push(-half, 0, -half, -half, 85, -half);
+    for (let y = 0; y <= 80; y += 10) {
+      const len = (y % 20 === 0) ? 4.0 : 2.0;
+      pts.push(-half, y, -half, -half - len, y, -half);
+      pts.push(-half, y, -half, -half, y, -half - len);
+    }
+
+    frameGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const frameMat = new THREE.LineBasicMaterial({
+      color: 0x141413,
+      transparent: true,
+      opacity: 0.45
+    });
+    axesGroup.add(new THREE.LineSegments(frameGeo, frameMat));
+
+    // Swiss Red Origin Crosshair & North Arrow Marker at (-half - 10, 0, -half - 10)
+    const redGeo = new THREE.BufferGeometry();
+    const nX = -half - 10;
+    const nZ = half + 10;
+    const redPts = [
+      nX, 0.2, nZ + 8,  nX, 0.2, nZ - 8,
+      nX, 0.2, nZ - 8,  nX - 2.5, 0.2, nZ - 3.5,
+      nX, 0.2, nZ - 8,  nX + 2.5, 0.2, nZ - 3.5,
+      // Corner elevation datum indicator
+      -half, 0, half, -half, 18, half
+    ];
+    redGeo.setAttribute('position', new THREE.Float32BufferAttribute(redPts, 3));
+    const redMat = new THREE.LineBasicMaterial({ color: 0xff331f });
+    axesGroup.add(new THREE.LineSegments(redGeo, redMat));
+  }
+
+  function buildProbeMarker() {
+    probeMarkerGroup.clear();
+    // Vertical laser pin + ground target ring
+    const ringGeo = new THREE.RingGeometry(1.4, 2.0, 24);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xff331f,
+      side: THREE.DoubleSide
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.y = 0.15;
+    probeMarkerGroup.add(ring);
+
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 14, 0)
+    ]);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xff331f });
+    probeMarkerGroup.add(new THREE.Line(lineGeo, lineMat));
+    probeMarkerGroup.visible = false;
+  }
+
+  // ============================================================================
+  // 5. TERRAIN DEM GENERATION & FINITE-DIFFERENCE SLOPE/ASPECT COMPUTATION
+  // ============================================================================
+  function evaluateElevationRaw(nx, nz, noise, relief, roughness, archetype) {
+    // nx, nz in [-1, 1]
+    const dist2 = nx * nx + nz * nz;
+    const radialFalloff = Math.max(0, 1.0 - 0.36 * dist2);
+
+    // Multi-octave FBM + Ridged noise
+    let freq = 1.45;
+    let amp = 1.0;
+    let fbm = 0;
+    let ridged = 0;
+    let norm = 0;
+
+    for (let o = 0; o < 5; o++) {
+      const n = noise.noise2D(nx * freq + o * 7.3, nz * freq - o * 5.1);
+      fbm += n * amp;
+      const r = 1.0 - Math.abs(n);
+      ridged += r * r * amp;
+      norm += amp;
+      freq *= 2.08;
+      amp *= roughness;
+    }
+    fbm = (fbm / norm) * 0.5 + 0.5; // [0, 1]
+    ridged = ridged / norm;         // [0, 1]
+
+    let hNorm = 0;
+
+    if (archetype === 'alpine') {
+      // Diagonal primary mountain ridge with glacial side valleys
+      const ridgeAxis = Math.abs(nx * 0.75 + nz * 0.65 - 0.12 * noise.noise2D(nx * 1.8, nz * 1.8));
+      const ridgeProfile = Math.exp(-ridgeAxis * ridgeAxis * 2.8);
+      hNorm = (0.55 * ridged + 0.45 * fbm) * (0.45 + 0.72 * ridgeProfile) * radialFalloff;
+    } else if (archetype === 'canyon') {
+      // Terraced canyon with meandering river valley and stepped plateaus
+      const meander = 0.25 * noise.noise2D(nz * 1.4, nx * 1.4);
+      const valleyDist = Math.abs(nx - meander);
+      const canyonCarve = 1.0 - Math.exp(-valleyDist * valleyDist * 8.5);
+      const raw = (0.62 * fbm + 0.38 * ridged) * canyonCarve * (0.6 + 0.4 * radialFalloff);
+      // Soft geological strata terracing
+      const steps = 6.0;
+      const terraced = (Math.floor(raw * steps) + 0.35 * Math.sin((raw * steps % 1) * Math.PI)) / steps;
+      hNorm = 0.65 * raw + 0.35 * terraced;
+    } else if (archetype === 'basin') {
+      // Twin-peak amphitheater surrounding a sheltered central alpine saddle/basin
+      const p1 = Math.exp(-((nx + 0.42) ** 2 + (nz + 0.28) ** 2) * 3.8);
+      const p2 = Math.exp(-((nx - 0.45) ** 2 + (nz - 0.32) ** 2) * 3.4);
+      const ring = Math.exp(-Math.pow(Math.sqrt(dist2) - 0.58, 2) * 6.5);
+      hNorm = (0.48 * p1 + 0.48 * p2 + 0.38 * ring) * (0.55 + 0.65 * ridged) + 0.18 * fbm * radialFalloff;
+    } else {
+      // Rolling foothills: gentle undulating topography ideal for terraced clusters
+      hNorm = (0.78 * fbm + 0.22 * ridged) * (0.58 + 0.42 * radialFalloff) * 0.76;
+    }
+
+    return Math.max(0.8, hNorm * relief);
+  }
+
+  function generateTerrainData() {
+    const noise = new SimplexNoise2D(state.terrainSeed);
+    const N = GRID_RES;
+    const cellSize = WORLD_SIZE / N;
+
+    let minH = Infinity;
+    let maxH = -Infinity;
+
+    // 1. Populate elevation grid
+    for (let iz = 0; iz <= N; iz++) {
+      const nz = (iz / N) * 2 - 1;
+      for (let ix = 0; ix <= N; ix++) {
+        const nx = (ix / N) * 2 - 1;
+        const h = evaluateElevationRaw(nx, nz, noise, state.relief, state.roughness, state.archetype);
+        const idx = iz * (N + 1) + ix;
+        state.heightGrid[idx] = h;
+        if (h < minH) minH = h;
+        if (h > maxH) maxH = h;
+      }
+    }
+
+    state.minElev = minH;
+    state.maxElev = maxH;
+
+    // 2. Compute Finite-Difference Slope (in degrees) & Contour Aspect Angle
+    let buildableCells = 0;
+    let totalInteriorCells = 0;
+    const buckets = [0, 0, 0, 0];
+
+    for (let iz = 0; iz <= N; iz++) {
+      for (let ix = 0; ix <= N; ix++) {
+        const idx = iz * (N + 1) + ix;
+        const ix0 = Math.max(0, ix - 1);
+        const ix1 = Math.min(N, ix + 1);
+        const iz0 = Math.max(0, iz - 1);
+        const iz1 = Math.min(N, iz + 1);
+
+        const dhdx = (state.heightGrid[iz * (N + 1) + ix1] - state.heightGrid[iz * (N + 1) + ix0]) / ((ix1 - ix0) * cellSize);
+        const dhdz = (state.heightGrid[iz1 * (N + 1) + ix] - state.heightGrid[iz0 * (N + 1) + ix]) / ((iz1 - iz0) * cellSize);
+
+        const gradMag = Math.sqrt(dhdx * dhdx + dhdz * dhdz);
+        const slopeDeg = Math.atan(gradMag) * (180 / Math.PI);
+        // Contour tangent angle so long axis of building aligns with contour line
+        const contourAngle = Math.atan2(-dhdx, dhdz);
+
+        state.slopeGrid[idx] = slopeDeg;
+        state.aspectGrid[idx] = contourAngle;
+
+        if (ix > 4 && ix < N - 4 && iz > 4 && iz < N - 4) {
+          totalInteriorCells++;
+          if (slopeDeg <= state.maxSlope) buildableCells++;
+          if (slopeDeg < 12) buckets[0]++;
+          else if (slopeDeg < 24) buckets[1]++;
+          else if (slopeDeg < 35) buckets[2]++;
+          else buckets[3]++;
+        }
+      }
+    }
+
+    state.buildableRatio = totalInteriorCells > 0 ? (buildableCells / totalInteriorCells) * 100 : 0;
+    const sumB = Math.max(1, buckets[0] + buckets[1] + buckets[2] + buckets[3]);
+    state.slopeBuckets = buckets.map((b) => Math.round((b / sumB) * 100));
+  }
+
+  // Bilinear interpolation helper for exact world (x, z) queries
+  function sampleTerrainAt(worldX, worldZ) {
+    const N = GRID_RES;
+    const half = WORLD_SIZE / 2;
+    const u = Math.max(0, Math.min(1, (worldX + half) / WORLD_SIZE)) * N;
+    const v = Math.max(0, Math.min(1, (worldZ + half) / WORLD_SIZE)) * N;
+
+    const ix = Math.min(N - 1, Math.floor(u));
+    const iz = Math.min(N - 1, Math.floor(v));
+    const fx = u - ix;
+    const fz = v - iz;
+
+    const i00 = iz * (N + 1) + ix;
+    const i10 = i00 + 1;
+    const i01 = (iz + 1) * (N + 1) + ix;
+    const i11 = i01 + 1;
+
+    const h0 = state.heightGrid[i00] * (1 - fx) + state.heightGrid[i10] * fx;
+    const h1 = state.heightGrid[i01] * (1 - fx) + state.heightGrid[i11] * fx;
+    const h = h0 * (1 - fz) + h1 * fz;
+
+    const s0 = state.slopeGrid[i00] * (1 - fx) + state.slopeGrid[i10] * fx;
+    const s1 = state.slopeGrid[i01] * (1 - fx) + state.slopeGrid[i11] * fx;
+    const slope = s0 * (1 - fz) + s1 * fz;
+
+    const aspect = state.aspectGrid[i00];
+    return { h, slope, aspect };
+  }
+
+  // ============================================================================
+  // 6. TERRAIN MESH, WIREFRAME & MARCHING SQUARES CONTOUR CONSTRUCTION
+  // ============================================================================
+  function buildTerrainMeshes() {
+    if (terrainMesh) {
+      scene.remove(terrainMesh);
+      terrainMesh.geometry.dispose();
+      terrainMesh.material.dispose();
+    }
+    if (wireMesh) {
+      scene.remove(wireMesh);
+      wireMesh.geometry.dispose();
+      wireMesh.material.dispose();
+    }
+
+    const N = GRID_RES;
+    const geo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, N, N);
+    geo.rotateX(-Math.PI / 2);
+
+    const posAttr = geo.attributes.position;
+    const colors = new Float32Array(posAttr.count * 3);
+
+    for (let i = 0; i < posAttr.count; i++) {
+      const h = state.heightGrid[i];
+      posAttr.setY(i, h);
+    }
+
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+
+    updateTerrainVertexColors(geo);
+
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.92,
+      metalness: 0.02,
+      transparent: true,
+      opacity: 0.94,
+      polygonOffset: true,
+      polygonOffsetFactor: 2,
+      polygonOffsetUnits: 2
+    });
+
+    terrainMesh = new THREE.Mesh(geo, mat);
+    terrainMesh.receiveShadow = true;
+    scene.add(terrainMesh);
+
+    // Semi-transparent architectural wireframe mesh overlay
+    const wireMat = new THREE.MeshBasicMaterial({
+      color: 0x141413,
+      wireframe: true,
+      transparent: true,
+      opacity: state.slopeAnalysisMode ? 0.08 : 0.065
+    });
+    wireMesh = new THREE.Mesh(geo.clone(), wireMat);
+    wireMesh.position.y = 0.04;
+    wireMesh.visible = state.showWireframe;
+    scene.add(wireMesh);
+
+    buildMarchingSquaresContours();
+  }
+
+  function updateTerrainVertexColors(geometry) {
+    const geo = geometry || (terrainMesh && terrainMesh.geometry);
+    if (!geo) return;
+    const colorAttr = geo.attributes.color;
+    const count = colorAttr.count;
+
+    const cPaperLow = new THREE.Color(0xe6e4dc);
+    const cPaperHigh = new THREE.Color(0xfaf9f5);
+
+    // Slope analysis diagnostic palette (Swiss architectural diagram colors)
+    const cFlat = new THREE.Color(0xd5e3d8);     // Optimal buildable (< 12 deg)
+    const cMod = new THREE.Color(0xe9c46a);      // Moderate terraced (12 - maxSlope)
+    const cThreshold = new THREE.Color(0xf4a261);// Near threshold
+    const cSteep = new THREE.Color(0xe76f51);    // Steep (> maxSlope)
+    const cCliff = new THREE.Color(0x9b2226);    // Extreme cliff (> 35 deg)
+
+    const tmp = new THREE.Color();
+    const elevSpan = Math.max(1, state.maxElev - state.minElev);
+
+    for (let i = 0; i < count; i++) {
+      const h = state.heightGrid[i];
+      const slope = state.slopeGrid[i];
+      const tElev = Math.max(0, Math.min(1, (h - state.minElev) / elevSpan));
+
+      if (!state.slopeAnalysisMode) {
+        // Pure Swiss white/warm-gray museum relief model
+        tmp.copy(cPaperLow).lerp(cPaperHigh, tElev);
+      } else {
+        // Real-time slope diagnostic coloring tied directly to state.maxSlope
+        if (slope <= state.maxSlope * 0.55) {
+          tmp.copy(cFlat).lerp(cMod, slope / Math.max(1, state.maxSlope * 0.55) * 0.45);
+        } else if (slope <= state.maxSlope) {
+          const u = (slope - state.maxSlope * 0.55) / Math.max(1, state.maxSlope * 0.45);
+          tmp.copy(cMod).lerp(cThreshold, u);
+        } else if (slope <= 36) {
+          const u = Math.min(1, (slope - state.maxSlope) / Math.max(2, 36 - state.maxSlope));
+          tmp.copy(cSteep).lerp(cCliff, u * 0.7);
+        } else {
+          tmp.copy(cCliff);
+        }
+      }
+
+      colorAttr.setXYZ(i, tmp.r, tmp.g, tmp.b);
+    }
+    colorAttr.needsUpdate = true;
+  }
+
+  // Marching Squares algorithm to extract exact 3D elevation isolines
+  function buildMarchingSquaresContours() {
+    if (minorContourLines) {
+      scene.remove(minorContourLines);
+      minorContourLines.geometry.dispose();
+      minorContourLines.material.dispose();
+    }
+    if (majorContourLines) {
+      scene.remove(majorContourLines);
+      majorContourLines.geometry.dispose();
+      majorContourLines.material.dispose();
+    }
+
+    const N = GRID_RES;
+    const half = WORLD_SIZE / 2;
+    const cellSize = WORLD_SIZE / N;
+    const minorStep = 2.0; // Every 2.0m
+    const majorEvery = 5;  // Every 10.0m is an index contour
+
+    const minorPts = [];
+    const majorPts = [];
+
+    const startLevel = Math.ceil(state.minElev / minorStep);
+    const endLevel = Math.floor(state.maxElev / minorStep);
+
+    for (let lvlIdx = startLevel; lvlIdx <= endLevel; lvlIdx++) {
+      const iso = lvlIdx * minorStep;
+      const isMajor = (lvlIdx % majorEvery === 0);
+      const targetArr = isMajor ? majorPts : minorPts;
+      const yOffset = isMajor ? 0.16 : 0.11;
+
+      for (let iz = 0; iz < N; iz++) {
+        const z0 = -half + iz * cellSize;
+        const z1 = z0 + cellSize;
+        for (let ix = 0; ix < N; ix++) {
+          const x0 = -half + ix * cellSize;
+          const x1 = x0 + cellSize;
+
+          const h00 = state.heightGrid[iz * (N + 1) + ix];
+          const h10 = state.heightGrid[iz * (N + 1) + ix + 1];
+          const h11 = state.heightGrid[(iz + 1) * (N + 1) + ix + 1];
+          const h01 = state.heightGrid[(iz + 1) * (N + 1) + ix];
+
+          let mask = 0;
+          if (h00 >= iso) mask |= 1;
+          if (h10 >= iso) mask |= 2;
+          if (h11 >= iso) mask |= 4;
+          if (h01 >= iso) mask |= 8;
+          if (mask === 0 || mask === 15) continue;
+
+          // Edge interpolations
+          const interp = (va, vb) => {
+            const denom = vb - va;
+            return Math.abs(denom) < 1e-5 ? 0.5 : (iso - va) / denom;
+          };
+
+          const eTop = () => [x0 + interp(h00, h10) * cellSize, iso + yOffset, z0];
+          const eRight = () => [x1, iso + yOffset, z0 + interp(h10, h11) * cellSize];
+          const eBottom = () => [x0 + interp(h01, h11) * cellSize, iso + yOffset, z1];
+          const eLeft = () => [x0, iso + yOffset, z0 + interp(h00, h01) * cellSize];
+
+          const addSeg = (pA, pB) => {
+            targetArr.push(pA[0], pA[1], pA[2], pB[0], pB[1], pB[2]);
+          };
+
+          switch (mask) {
+            case 1:
+            case 14:
+              addSeg(eLeft(), eTop());
+              break;
+            case 2:
+            case 13:
+              addSeg(eTop(), eRight());
+              break;
+            case 3:
+            case 12:
+              addSeg(eLeft(), eRight());
+              break;
+            case 4:
+            case 11:
+              addSeg(eRight(), eBottom());
+              break;
+            case 5:
+              addSeg(eLeft(), eBottom());
+              addSeg(eTop(), eRight());
+              break;
+            case 6:
+            case 9:
+              addSeg(eTop(), eBottom());
+              break;
+            case 7:
+            case 8:
+              addSeg(eLeft(), eBottom());
+              break;
+            case 10:
+              addSeg(eLeft(), eTop());
+              addSeg(eBottom(), eRight());
+              break;
+          }
+        }
+      }
+    }
+
+    const minorGeo = new THREE.BufferGeometry();
+    minorGeo.setAttribute('position', new THREE.Float32BufferAttribute(minorPts, 3));
+    const minorMat = new THREE.LineBasicMaterial({
+      color: state.slopeAnalysisMode ? 0x222220 : 0x7c7a72,
+      transparent: true,
+      opacity: state.slopeAnalysisMode ? 0.36 : 0.42
+    });
+    minorContourLines = new THREE.LineSegments(minorGeo, minorMat);
+    minorContourLines.visible = state.showContours;
+    scene.add(minorContourLines);
+
+    const majorGeo = new THREE.BufferGeometry();
+    majorGeo.setAttribute('position', new THREE.Float32BufferAttribute(majorPts, 3));
+    const majorMat = new THREE.LineBasicMaterial({
+      color: 0x141413,
+      transparent: true,
+      opacity: state.slopeAnalysisMode ? 0.68 : 0.78
+    });
+    majorContourLines = new THREE.LineSegments(majorGeo, majorMat);
+    majorContourLines.visible = state.showContours;
+    scene.add(majorContourLines);
+  }
+
+  // ============================================================================
+  // 7. ARCHITECTURAL SITE SELECTION, CLUSTERING & SETTLEMENT GENERATION
+  // ============================================================================
+  function generateSettlement() {
+    const rng = new SeededRandom(state.settlementSeed);
+    const N = GRID_RES;
+    const half = WORLD_SIZE / 2;
+    const cellSize = WORLD_SIZE / N;
+    const margin = 16; // Keep away from plinth edges
+
+    // Step 1: Collect all valid candidate cells that satisfy the Max Slope constraint
+    const candidates = [];
+    const elevSpan = Math.max(1, state.maxElev - state.minElev);
+
+    for (let iz = 0; iz <= N; iz++) {
+      const z = -half + iz * cellSize;
+      if (Math.abs(z) > half - margin) continue;
+
+      for (let ix = 0; ix <= N; ix++) {
+        const x = -half + ix * cellSize;
+        if (Math.abs(x) > half - margin) continue;
+
+        const idx = iz * (N + 1) + ix;
+        const slope = state.slopeGrid[idx];
+        const h = state.heightGrid[idx];
+        const aspect = state.aspectGrid[idx];
+
+        // Strict slope constraint filter
+        if (slope > state.maxSlope) continue;
+
+        // Avoid extreme lowest drainage trough (bottom 6%) and highest exposed peak (top 8%)
+        const relElev = (h - state.minElev) / elevSpan;
+        if (relElev < 0.05 || relElev > 0.93) continue;
+
+        // Compute Architectural Suitability Score:
+        // 1) Flatter terrain within threshold is favored
+        const slopeScore = 1.0 - (slope / Math.max(1, state.maxSlope)) * 0.65;
+        // 2) Mid-slope / sunlit bench elevation preference (bell curve around relElev = 0.42)
+        const elevScore = Math.exp(-Math.pow((relElev - 0.42) / 0.28, 2));
+        // 3) South/Southeast solar orientation bonus
+        const solarBonus = 0.85 + 0.15 * Math.cos(aspect - 0.4);
+
+        const baseSuitability = slopeScore * elevScore * solarBonus;
+
+        candidates.push({
+          x,
+          z,
+          h,
+          slope,
+          aspect,
+          relElev,
+          baseSuitability
+        });
+      }
+    }
+
+    state.buildings = [];
+    state.walkways = [];
+    state.clusterCenters = [];
+
+    if (candidates.length === 0) {
+      buildSettlementMeshes();
+      updateTelemetryUI();
+      return;
+    }
+
+    // Step 2: Select Primary Settlement Nucleation Seeds (Cluster Cores)
+    // Higher clusterDensity -> fewer, tighter nuclei (2-3); lower density -> more dispersed nuclei (4-6)
+    const numClusters = Math.max(2, Math.min(5, Math.round(5 - state.clusterDensity * 2.5)));
+    const sortedForSeeds = [...candidates].sort(
+      (a, b) => (b.baseSuitability + rng.next() * 0.25) - (a.baseSuitability + rng.next() * 0.25)
+    );
+
+    const minClusterDist = WORLD_SIZE * (0.22 + (1 - state.clusterDensity) * 0.15);
+    for (let i = 0; i < sortedForSeeds.length && state.clusterCenters.length < numClusters; i++) {
+      const c = sortedForSeeds[i];
+      let farEnough = true;
+      for (const existing of state.clusterCenters) {
+        const dx = c.x - existing.x;
+        const dz = c.z - existing.z;
+        if (Math.sqrt(dx * dx + dz * dz) < minClusterDist) {
+          farEnough = false;
+          break;
+        }
+      }
+      if (farEnough) {
+        state.clusterCenters.push(c);
+      }
+    }
+    if (state.clusterCenters.length === 0) {
+      state.clusterCenters.push(sortedForSeeds[0]);
+    }
+
+    // Step 3: Score candidates by Cluster Gravity & Contour Affinity
+    // High clusterDensity pulls candidates strongly toward cluster centers and along matching contour elevations
+    const sigmaSpatial = 22 + (1.0 - state.clusterDensity) * 68;
+    const sigmaElev = 4.5 + (1.0 - state.clusterDensity) * 14;
+
+    for (const c of candidates) {
+      let bestClusterAffinity = 0;
+      let nearestClusterIdx = 0;
+      let minDistToCore = Infinity;
+
+      for (let k = 0; k < state.clusterCenters.length; k++) {
+        const core = state.clusterCenters[k];
+        const dx = c.x - core.x;
+        const dz = c.z - core.z;
+        const d2 = dx * dx + dz * dz;
+        const dist = Math.sqrt(d2);
+        const dh = Math.abs(c.h - core.h);
+
+        // Anisotropic contour-following affinity: buildings prefer spreading along the same elevation contour
+        const spatialWeight = Math.exp(-d2 / (2 * sigmaSpatial * sigmaSpatial));
+        const contourWeight = Math.exp(-(dh * dh) / (2 * sigmaElev * sigmaElev));
+        const affinity = spatialWeight * (0.55 + 0.45 * contourWeight);
+
+        if (affinity > bestClusterAffinity) {
+          bestClusterAffinity = affinity;
+          nearestClusterIdx = k;
+        }
+        if (dist < minDistToCore) {
+          minDistToCore = dist;
+        }
+      }
+
+      const randomJitter = 0.82 + rng.next() * 0.36;
+      c.clusterIdx = nearestClusterIdx;
+      c.distToCore = minDistToCore;
+      c.totalScore =
+        c.baseSuitability *
+        ((1 - state.clusterDensity) * 0.65 + state.clusterDensity * Math.pow(bestClusterAffinity, 0.75)) *
+        randomJitter;
+    }
+
+    // Sort candidates by total score descending
+    candidates.sort((a, b) => b.totalScore - a.totalScore);
+
+    // Step 4: Iterative Site Selection with Footprint Spacing & Typology Assignment
+    const placed = [];
+
+    for (let i = 0; i < candidates.length && placed.length < state.targetCount; i++) {
+      const cand = candidates[i];
+
+      // Determine building typology based on local slope & role in cluster
+      const isClusterCore = placed.filter((b) => b.clusterIdx === cand.clusterIdx).length === 0;
+      const typology = selectBuildingTypology(cand, isClusterCore, rng);
+
+      // Sub-grid jitter for natural architectural layout
+      const jx = cand.x + rng.range(-1.2, 1.2);
+      const jz = cand.z + rng.range(-1.2, 1.2);
+      const sample = sampleTerrainAt(jx, jz);
+      if (sample.slope > state.maxSlope) continue;
+
+      // Check minimum center-to-center spacing (accounting for building footprint radius)
+      const effectiveMinDist = Math.max(state.minSpacing, typology.footprintRadius * 1.65);
+      let collision = false;
+      for (let j = 0; j < placed.length; j++) {
+        const other = placed[j];
+        const dx = jx - other.x;
+        const dz = jz - other.z;
+        const reqDist = Math.max(effectiveMinDist, (typology.footprintRadius + other.footprintRadius) * 1.15);
+        if (dx * dx + dz * dz < reqDist * reqDist) {
+          collision = true;
+          break;
+        }
+      }
+      if (collision) continue;
+
+      // Orient building parallel (or orthogonal) to the local contour tangent
+      const orientJitter = rng.range(-0.14, 0.14);
+      const rotationY = sample.aspect + orientJitter + (typology.perpendicularToContour ? Math.PI * 0.5 : 0);
+
+      // Sample the 4 corners of the building footprint to calculate exact slope drop & foundation stilts
+      const cosR = Math.cos(rotationY);
+      const sinR = Math.sin(rotationY);
+      const hw = typology.width * 0.5;
+      const hd = typology.depth * 0.5;
+      const corners = [
+        [-hw, -hd],
+        [hw, -hd],
+        [hw, hd],
+        [-hw, hd]
+      ];
+      let hMin = sample.h;
+      let hMax = sample.h;
+      for (const [cx, cz] of corners) {
+        const wx = jx + cx * cosR - cz * sinR;
+        const wz = jz + cx * sinR + cz * cosR;
+        const ch = sampleTerrainAt(wx, wz).h;
+        if (ch < hMin) hMin = ch;
+        if (ch > hMax) hMax = ch;
+      }
+
+      placed.push({
+        id: placed.length + 1,
+        x: jx,
+        z: jz,
+        hCenter: sample.h,
+        hMin,
+        hMax,
+        slope: sample.slope,
+        rotationY,
+        clusterIdx: cand.clusterIdx,
+        distToCore: cand.distToCore,
+        ...typology
+      });
+    }
+
+    // Order buildings by nucleation sequence (cluster cores first, then radiating outward by distance)
+    placed.sort((a, b) => {
+      if (a.isCore !== b.isCore) return a.isCore ? -1 : 1;
+      return a.distToCore - b.distToCore;
+    });
+    placed.forEach((b, idx) => {
+      b.growthOrder = idx;
+    });
+
+    state.buildings = placed;
+
+    // Step 5: Compute Elevated Walkway Network (Proximity MST within settlement clusters)
+    computeWalkwayNetwork();
+
+    // Build 3D geometry & trigger smooth restrained growth animation
+    buildSettlementMeshes();
+    startGrowthAnimation();
+    updateTelemetryUI();
+  }
+
+  function selectBuildingTypology(cand, isClusterCore, rng) {
+    if (isClusterCore) {
+      // TYPE-A: CORE NODE [聚落公共核心 / 红色信号塔台]
+      return {
+        code: 'TYPE-A',
+        name: '聚落核心塔台',
+        isCore: true,
+        isAccent: true,
+        width: 6.4,
+        depth: 6.4,
+        height: rng.range(9.5, 13.0),
+        footprintRadius: 4.6,
+        perpendicularToContour: false
+      };
+    }
+
+    const slope = cand.slope;
+    const roll = rng.next();
+
+    if (slope < 11.5 && roll < 0.45) {
+      // TYPE-B: COURTYARD COMPOUND [L型山地合院]
+      const w = rng.range(6.2, 8.4);
+      const d = rng.range(5.6, 7.4);
+      return {
+        code: 'TYPE-B',
+        name: '山地合院单元',
+        isCore: false,
+        isAccent: roll < 0.12,
+        width: w,
+        depth: d,
+        height: rng.range(3.8, 5.4),
+        footprintRadius: Math.sqrt(w * w + d * d) * 0.5,
+        perpendicularToContour: false
+      };
+    } else if (slope < 21.0 && roll < 0.68) {
+      // TYPE-C: STEPPED TERRACE [顺等高线退台住宅]
+      const w = rng.range(7.0, 10.2);
+      const d = rng.range(4.0, 5.4);
+      return {
+        code: 'TYPE-C',
+        name: '退台聚落单元',
+        isCore: false,
+        isAccent: roll < 0.14,
+        width: w,
+        depth: d,
+        height: rng.range(4.6, 6.8),
+        footprintRadius: Math.sqrt(w * w + d * d) * 0.5,
+        perpendicularToContour: false
+      };
+    } else if (roll < 0.82) {
+      // TYPE-D: CANTILEVER BAR [悬挑长廊建筑]
+      const w = rng.range(3.6, 4.8);
+      const d = rng.range(7.5, 10.6);
+      return {
+        code: 'TYPE-D',
+        name: '悬挑长廊建筑',
+        isCore: false,
+        isAccent: roll < 0.22,
+        width: w,
+        depth: d,
+        height: rng.range(3.6, 5.2),
+        footprintRadius: Math.sqrt(w * w + d * d) * 0.48,
+        perpendicularToContour: true // Projects out over the slope
+      };
+    } else {
+      // TYPE-E: STILT TOWER [陡坡吊脚塔楼]
+      const w = rng.range(4.0, 5.2);
+      const d = rng.range(4.0, 5.2);
+      return {
+        code: 'TYPE-E',
+        name: '陡坡吊脚塔楼',
+        isCore: false,
+        isAccent: roll < 0.25,
+        width: w,
+        depth: d,
+        height: rng.range(6.8, 9.8),
+        footprintRadius: Math.sqrt(w * w + d * d) * 0.5,
+        perpendicularToContour: false
+      };
+    }
+  }
+
+  function computeWalkwayNetwork() {
+    state.walkways = [];
+    const blds = state.buildings;
+    if (blds.length < 2) return;
+
+    const maxLinkDist = Math.max(state.minSpacing * 2.4, 26);
+    const connected = new Set([0]);
+    const unconnected = new Set();
+    for (let i = 1; i < blds.length; i++) unconnected.add(i);
+
+    // Prim's MST with distance threshold so walkways connect buildings within natural clusters
+    while (unconnected.size > 0) {
+      let bestU = -1;
+      let bestV = -1;
+      let bestCost = Infinity;
+
+      for (const u of connected) {
+        const bu = blds[u];
+        for (const v of unconnected) {
+          const bv = blds[v];
+          const dx = bu.x - bv.x;
+          const dz = bu.z - bv.z;
+          const dh = Math.abs(bu.hCenter - bv.hCenter);
+          const dist = Math.sqrt(dx * dx + dz * dz);
+          // Penalize extreme vertical jumps so walkways follow contours
+          const cost = dist + dh * 1.8;
+          if (cost < bestCost) {
+            bestCost = cost;
+            bestU = u;
+            bestV = v;
+          }
+        }
+      }
+
+      if (bestV === -1) break;
+      const bu = blds[bestU];
+      const bv = blds[bestV];
+      const dist = Math.hypot(bu.x - bv.x, bu.z - bv.z);
+
+      if (dist <= maxLinkDist) {
+        state.walkways.push({
+          from: bu,
+          to: bv,
+          order: Math.max(bu.growthOrder, bv.growthOrder)
+        });
+      }
+      connected.add(bestV);
+      unconnected.delete(bestV);
+    }
+  }
+
+  // ============================================================================
+  // 8. 3D ARCHITECTURAL MASSING & WALKWAY MESH BUILDER
+  // ============================================================================
+  const matWhiteMass = new THREE.MeshStandardMaterial({
+    color: 0xfcfbf9,
+    roughness: 0.75,
+    metalness: 0.04
+  });
+
+  const matWarmPodium = new THREE.MeshStandardMaterial({
+    color: 0xd8d5cc,
+    roughness: 0.88,
+    metalness: 0.05
+  });
+
+  const matDarkStilt = new THREE.MeshStandardMaterial({
+    color: 0x242422,
+    roughness: 0.7,
+    metalness: 0.2
+  });
+
+  const matSwissRed = new THREE.MeshStandardMaterial({
+    color: 0xff331f,
+    roughness: 0.55,
+    metalness: 0.08
+  });
+
+  const matEdgeLine = new THREE.LineBasicMaterial({
+    color: 0x141413,
+    transparent: true,
+    opacity: 0.42
+  });
+
+  function addBoxWithEdges(parent, w, h, d, x, y, z, material, castShadow = true) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = castShadow;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+
+    const edges = new THREE.EdgesGeometry(geo);
+    const line = new THREE.LineSegments(edges, matEdgeLine);
+    line.position.copy(mesh.position);
+    parent.add(line);
+    return mesh;
+  }
+
+  function buildSettlementMeshes() {
+    settlementGroup.clear();
+    walkwayGroup.clear();
+
+    for (const b of state.buildings) {
+      const unitGroup = new THREE.Group();
+      unitGroup.position.set(b.x, 0, b.z);
+      unitGroup.rotation.y = b.rotationY;
+
+      const baseFloorY = b.hMax;
+      const stiltDrop = Math.max(1.2, b.hMax - b.hMin + 1.4);
+
+      if (b.code === 'TYPE-A') {
+        // CORE NODE: Podium + White Main Hall + Swiss Red Vertical Beacon Tower
+        addBoxWithEdges(unitGroup, b.width * 1.05, stiltDrop, b.depth * 1.05, 0, baseFloorY - stiltDrop * 0.5, 0, matWarmPodium);
+        addBoxWithEdges(unitGroup, b.width, b.height * 0.52, b.depth, 0, baseFloorY + b.height * 0.26, 0, matWhiteMass);
+        addBoxWithEdges(
+          unitGroup,
+          b.width * 0.44,
+          b.height,
+          b.depth * 0.44,
+          b.width * 0.18,
+          baseFloorY + b.height * 0.5,
+          -b.depth * 0.18,
+          matSwissRed
+        );
+      } else if (b.code === 'TYPE-B') {
+        // COURTYARD COMPOUND: Stone Podium + L-shaped White Wings + Red Courtyard Pavilion
+        addBoxWithEdges(unitGroup, b.width, stiltDrop, b.depth, 0, baseFloorY - stiltDrop * 0.5, 0, matWarmPodium);
+        // Main north bar
+        addBoxWithEdges(
+          unitGroup,
+          b.width,
+          b.height,
+          b.depth * 0.42,
+          0,
+          baseFloorY + b.height * 0.5,
+          -b.depth * 0.29,
+          matWhiteMass
+        );
+        // Side wing bar
+        addBoxWithEdges(
+          unitGroup,
+          b.width * 0.38,
+          b.height * 0.78,
+          b.depth * 0.58,
+          -b.width * 0.31,
+          baseFloorY + b.height * 0.39,
+          b.depth * 0.21,
+          matWhiteMass
+        );
+        // Subtle Swiss red entrance marker
+        addBoxWithEdges(
+          unitGroup,
+          b.width * 0.22,
+          b.height * (b.isAccent ? 1.15 : 0.45),
+          b.depth * 0.22,
+          b.width * 0.26,
+          baseFloorY + b.height * (b.isAccent ? 0.575 : 0.225),
+          b.depth * 0.22,
+          matSwissRed
+        );
+      } else if (b.code === 'TYPE-C') {
+        // STEPPED TERRACE: 3 cascading white levels aligned with contours
+        addBoxWithEdges(unitGroup, b.width, stiltDrop, b.depth, 0, baseFloorY - stiltDrop * 0.5, 0, matWarmPodium);
+        const h1 = b.height * 0.45;
+        const h2 = b.height * 0.78;
+        const h3 = b.height;
+        addBoxWithEdges(unitGroup, b.width, h1, b.depth, 0, baseFloorY + h1 * 0.5, 0, matWhiteMass);
+        addBoxWithEdges(unitGroup, b.width * 0.68, h2, b.depth * 0.82, -b.width * 0.1, baseFloorY + h2 * 0.5, -b.depth * 0.06, matWhiteMass);
+        addBoxWithEdges(
+          unitGroup,
+          b.width * 0.34,
+          h3,
+          b.depth * 0.65,
+          -b.width * 0.22,
+          baseFloorY + h3 * 0.5,
+          -b.depth * 0.12,
+          b.isAccent ? matSwissRed : matWhiteMass
+        );
+      } else if (b.code === 'TYPE-D') {
+        // CANTILEVER BAR: Pilotis structural columns + cantilevered upper volume
+        const colW = 0.42;
+        const colPositions = [
+          [-b.width * 0.36, -b.depth * 0.36],
+          [b.width * 0.36, -b.depth * 0.36],
+          [-b.width * 0.36, b.depth * 0.22],
+          [b.width * 0.36, b.depth * 0.22]
+        ];
+        for (const [cx, cz] of colPositions) {
+          addBoxWithEdges(
+            unitGroup,
+            colW,
+            stiltDrop + 1.2,
+            colW,
+            cx,
+            baseFloorY - (stiltDrop + 1.2) * 0.5 + 0.6,
+            cz,
+            b.isAccent ? matSwissRed : matDarkStilt,
+            false
+          );
+        }
+        addBoxWithEdges(
+          unitGroup,
+          b.width,
+          b.height,
+          b.depth,
+          0,
+          baseFloorY + 0.6 + b.height * 0.5,
+          0,
+          matWhiteMass
+        );
+        if (b.isAccent) {
+          addBoxWithEdges(
+            unitGroup,
+            b.width * 1.04,
+            b.height * 0.28,
+            b.depth * 0.22,
+            0,
+            baseFloorY + 0.6 + b.height * 0.5,
+            b.depth * 0.4,
+            matSwissRed
+          );
+        }
+      } else {
+        // TYPE-E: STILT TOWER: 4 structural pilotis + vertical minimalist tower
+        const colW = 0.45;
+        const offsets = [
+          [-b.width * 0.35, -b.depth * 0.35],
+          [b.width * 0.35, -b.depth * 0.35],
+          [-b.width * 0.35, b.depth * 0.35],
+          [b.width * 0.35, b.depth * 0.35]
+        ];
+        for (const [cx, cz] of offsets) {
+          addBoxWithEdges(
+            unitGroup,
+            colW,
+            stiltDrop + 1.0,
+            colW,
+            cx,
+            baseFloorY - (stiltDrop + 1.0) * 0.5 + 0.5,
+            cz,
+            matDarkStilt,
+            false
+          );
+        }
+        addBoxWithEdges(
+          unitGroup,
+          b.width,
+          b.height,
+          b.depth,
+          0,
+          baseFloorY + 0.5 + b.height * 0.5,
+          0,
+          matWhiteMass
+        );
+        // Rooftop Swiss red mechanical/observation cap
+        if (b.isAccent) {
+          addBoxWithEdges(
+            unitGroup,
+            b.width * 0.55,
+            1.6,
+            b.depth * 0.55,
+            0,
+            baseFloorY + 0.5 + b.height + 0.8,
+            0,
+            matSwissRed
+          );
+        }
+      }
+
+      unitGroup.userData = {
+        growthOrder: b.growthOrder,
+        baseFloorY: b.hMin
+      };
+      settlementGroup.add(unitGroup);
+    }
+
+    // Build Elevated Contour Walkways (聚落高架连廊与步道)
+    const walkwayPts = [];
+    for (const link of state.walkways) {
+      const segs = 8;
+      for (let s = 0; s < segs; s++) {
+        const t0 = s / segs;
+        const t1 = (s + 1) / segs;
+        const x0 = link.from.x + (link.to.x - link.from.x) * t0;
+        const z0 = link.from.z + (link.to.z - link.from.z) * t0;
+        const x1 = link.from.x + (link.to.x - link.from.x) * t1;
+        const z1 = link.from.z + (link.to.z - link.from.z) * t1;
+        const y0 = sampleTerrainAt(x0, z0).h + 0.65;
+        const y1 = sampleTerrainAt(x1, z1).h + 0.65;
+        walkwayPts.push(x0, y0, z0, x1, y1, z1);
+      }
+    }
+    if (walkwayPts.length > 0) {
+      const wGeo = new THREE.BufferGeometry();
+      wGeo.setAttribute('position', new THREE.Float32BufferAttribute(walkwayPts, 3));
+      const wMat = new THREE.LineBasicMaterial({
+        color: 0xff331f,
+        transparent: true,
+        opacity: 0.78
+      });
+      const wLines = new THREE.LineSegments(wGeo, wMat);
+      walkwayGroup.add(wLines);
+    }
+    walkwayGroup.visible = state.showWalkways;
+  }
+
+  // ============================================================================
+  // 9. DYNAMIC GROWTH ANIMATION ENGINE
+  // ============================================================================
+  function startGrowthAnimation() {
+    state.isGrowing = true;
+    state.growthProgress = 0;
+    state.growthStartTime = performance.now();
+    // Scale duration cleanly with building count
+    state.growthDuration = Math.min(2800, Math.max(1100, state.buildings.length * 24));
+
+    settlementGroup.children.forEach((grp) => {
+      grp.scale.set(1, 0.001, 1);
+      grp.visible = false;
+    });
+    walkwayGroup.visible = false;
+  }
+
+  function updateGrowthAnimation(now) {
+    if (!state.isGrowing) return;
+
+    const elapsed = now - state.growthStartTime;
+    const rawProgress = Math.min(1, elapsed / state.growthDuration);
+    state.growthProgress = rawProgress;
+
+    const total = Math.max(1, settlementGroup.children.length);
+    let activeUnits = 0;
+
+    for (let i = 0; i < settlementGroup.children.length; i++) {
+      const grp = settlementGroup.children[i];
+      const order = grp.userData.growthOrder || i;
+      const startT = (order / total) * 0.72;
+      const localT = Math.max(0, Math.min(1, (rawProgress - startT) / 0.28));
+
+      if (localT <= 0) {
+        grp.visible = false;
+      } else {
+        grp.visible = true;
+        activeUnits++;
+        // Restrained cubic-out architectural emergence
+        const eased = 1 - Math.pow(1 - localT, 3);
+        grp.scale.set(1, Math.max(0.01, eased), 1);
+      }
+    }
+
+    const progBar = document.getElementById('growth-progress-bar');
+    const progText = document.getElementById('growth-status-text');
+    if (progBar) progBar.style.width = `${Math.round(rawProgress * 100)}%`;
+    if (progText) {
+      progText.textContent =
+        rawProgress < 1
+          ? `GROWING [${activeUnits}/${ state.buildings.length }]`
+          : `COMPLETE [${state.buildings.length} UNITS]`;
+    }
+
+    if (rawProgress >= 1) {
+      state.isGrowing = false;
+      walkwayGroup.visible = state.showWalkways;
+    }
+  }
+
+  // ============================================================================
+  // 10. CAMERA PRESETS, ORBIT CONTROLS & RAYCAST TERRAIN PROBE
+  // ============================================================================
+  function setCameraPreset(preset) {
+    state.cameraPreset = preset;
+    document.querySelectorAll('.hud-cam-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.cam === preset);
+    });
+
+    if (preset === 'iso') {
+      orbit.targetTheta = Math.PI * 0.24;
+      orbit.targetPhi = Math.PI * 0.31;
+      orbit.targetRadius = 255;
+      orbit.targetLookAt.set(0, 12, 0);
+    } else if (preset === 'top') {
+      orbit.targetTheta = 0;
+      orbit.targetPhi = 0.04; // Top-down architectural plan view
+      orbit.targetRadius = 285;
+      orbit.targetLookAt.set(0, 0, 0);
+    } else if (preset === 'elev') {
+      orbit.targetTheta = 0;
+      orbit.targetPhi = Math.PI * 0.465; // Low-angle sectional elevation view
+      orbit.targetRadius = 240;
+      orbit.targetLookAt.set(0, 18, 0);
+    } else if (preset === 'persp') {
+      orbit.targetTheta = -Math.PI * 0.32;
+      orbit.targetPhi = Math.PI * 0.38;
+      orbit.targetRadius = 165;
+      orbit.targetLookAt.set(0, 16, 0);
+    }
+  }
+
+  function updateCameraTransform() {
+    const damping = 0.14;
+    orbit.theta += (orbit.targetTheta - orbit.theta) * damping;
+    orbit.phi += (orbit.targetPhi - orbit.phi) * damping;
+    orbit.radius += (orbit.targetRadius - orbit.radius) * damping;
+    orbit.target.lerp(orbit.targetLookAt, damping);
+
+    const sinPhi = Math.sin(orbit.phi);
+    const cosPhi = Math.cos(orbit.phi);
+    const sinTheta = Math.sin(orbit.theta);
+    const cosTheta = Math.cos(orbit.theta);
+
+    activeCamera.position.set(
+      orbit.target.x + orbit.radius * sinPhi * sinTheta,
+      orbit.target.y + orbit.radius * cosPhi,
+      orbit.target.z + orbit.radius * sinPhi * cosTheta
+    );
+    activeCamera.lookAt(orbit.target);
+
+    // Update HUD azimuth readout
+    const degAz = (((orbit.theta * 180) / Math.PI) % 360 + 360) % 360;
+    const degPitch = 90 - (orbit.phi * 180) / Math.PI;
+    const camReadout = document.getElementById('hud-cam-coords');
+    if (camReadout) {
+      camReadout.textContent = `AZ ${degAz.toFixed(0)}° / ALT ${degPitch.toFixed(0)}° / D ${orbit.radius.toFixed(0)}m`;
+    }
+  }
+
+  function setupViewportInteractions(domElem) {
+    domElem.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    domElem.addEventListener('pointerdown', (e) => {
+      orbit.isDragging = true;
+      orbit.lastX = e.clientX;
+      orbit.lastY = e.clientY;
+      // Right-click, middle-click, or Shift+Left-click pans
+      orbit.dragMode = e.button === 2 || e.button === 1 || e.shiftKey ? 'pan' : 'rotate';
+      domElem.setPointerCapture(e.pointerId);
+    });
+
+    domElem.addEventListener('pointermove', (e) => {
+      const rect = domElem.getBoundingClientRect();
+      mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      if (!orbit.isDragging) {
+        updateTerrainProbe();
+        return;
+      }
+
+      const dx = e.clientX - orbit.lastX;
+      const dy = e.clientY - orbit.lastY;
+      orbit.lastX = e.clientX;
+      orbit.lastY = e.clientY;
+
+      if (orbit.dragMode === 'rotate') {
+        orbit.targetTheta -= dx * 0.0075;
+        orbit.targetPhi = Math.max(0.04, Math.min(Math.PI * 0.485, orbit.targetPhi - dy * 0.0065));
+      } else {
+        // Pan in camera plane
+        const panSpeed = orbit.radius * 0.0016;
+        const forward = new THREE.Vector3();
+        activeCamera.getWorldDirection(forward);
+        const right = new THREE.Vector3().crossVectors(forward, activeCamera.up).normalize();
+        const upVec = new THREE.Vector3(0, 1, 0);
+
+        orbit.targetLookAt.addScaledVector(right, -dx * panSpeed);
+        orbit.targetLookAt.addScaledVector(upVec, dy * panSpeed * 0.6);
+        // Clamp pan within reasonable bounds
+        orbit.targetLookAt.x = Math.max(-90, Math.min(90, orbit.targetLookAt.x));
+        orbit.targetLookAt.z = Math.max(-90, Math.min(90, orbit.targetLookAt.z));
+        orbit.targetLookAt.y = Math.max(-10, Math.min(60, orbit.targetLookAt.y));
+      }
+    });
+
+    const endDrag = (e) => {
+      orbit.isDragging = false;
+      try {
+        domElem.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+    };
+    domElem.addEventListener('pointerup', endDrag);
+    domElem.addEventListener('pointercancel', endDrag);
+
+    domElem.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        const zoomFactor = e.deltaY > 0 ? 1.08 : 0.92;
+        orbit.targetRadius = Math.max(75, Math.min(460, orbit.targetRadius * zoomFactor));
+      },
+      { passive: false }
+    );
+  }
+
+  function updateTerrainProbe() {
+    if (!terrainMesh) return;
+    raycaster.setFromCamera(mouseNDC, activeCamera);
+    const hits = raycaster.intersectObject(terrainMesh, false);
+    const probeReadout = document.getElementById('hud-probe-readout');
+
+    if (hits.length > 0) {
+      const pt = hits[0].point;
+      const sample = sampleTerrainAt(pt.x, pt.z);
+      probeMarkerGroup.position.set(pt.x, sample.h, pt.z);
+      probeMarkerGroup.visible = true;
+
+      if (probeReadout) {
+        const statusTag = sample.slope <= state.maxSlope ? '适宜建造 [OK]' : '坡度超限 [STEEP]';
+        probeReadout.textContent = `X:${pt.x.toFixed(1)}m  Z:${pt.z.toFixed(1)}m  ELEV:+${sample.h.toFixed(1)}m  SLOPE:${sample.slope.toFixed(1)}° (${statusTag})`;
+      }
+    } else {
+      probeMarkerGroup.visible = false;
+      if (probeReadout) {
+        probeReadout.textContent = 'PROBE: 移动光标探测三维地形坐标、高程与实时坡度';
+      }
+    }
+  }
+
+  // ============================================================================
+  // 11. UI SYNCHRONIZATION, TELEMETRY & ARCHITECTURAL DRAWING PNG EXPORT
+  // ============================================================================
+  function updateTelemetryUI() {
+    const setTxt = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+
+    setTxt('val-relief', `${state.relief} m`);
+    setTxt('val-roughness', state.roughness.toFixed(2));
+    setTxt('val-max-slope', `${state.maxSlope}°`);
+    setTxt('val-target-count', `${state.targetCount}`);
+    setTxt('val-min-spacing', `${state.minSpacing.toFixed(1)} m`);
+    setTxt('val-cluster-density', state.clusterDensity.toFixed(2));
+
+    setTxt('metric-settled-count', `${state.buildings.length}`);
+    setTxt('metric-buildable-area', `${state.buildableRatio.toFixed(1)}%`);
+    setTxt('metric-elev-range', `${state.minElev.toFixed(0)}–${state.maxElev.toFixed(0)}m`);
+
+    // Mean slope of placed buildings
+    let avgSlope = 0;
+    if (state.buildings.length > 0) {
+      avgSlope = state.buildings.reduce((acc, b) => acc + b.slope, 0) / state.buildings.length;
+    }
+    setTxt('metric-avg-slope', `${avgSlope.toFixed(1)}°`);
+
+    // Typology counts breakdown
+    const counts = { 'TYPE-A': 0, 'TYPE-B': 0, 'TYPE-C': 0, 'TYPE-D': 0, 'TYPE-E': 0 };
+    for (const b of state.buildings) {
+      counts[b.code] = (counts[b.code] || 0) + 1;
+    }
+    setTxt('typo-count-a', `${counts['TYPE-A']} 栋`);
+    setTxt('typo-count-b', `${counts['TYPE-B']} 栋`);
+    setTxt('typo-count-c', `${counts['TYPE-C']} 栋`);
+    setTxt('typo-count-d', `${counts['TYPE-D']} 栋`);
+    setTxt('typo-count-e', `${counts['TYPE-E']} 栋`);
+
+    // Slope distribution bars
+    for (let i = 0; i < 4; i++) {
+      const bar = document.getElementById(`slope-bar-${i}`);
+      const pct = document.getElementById(`slope-pct-${i}`);
+      if (bar) bar.style.width = `${state.slopeBuckets[i]}%`;
+      if (pct) pct.textContent = `${state.slopeBuckets[i]}%`;
+    }
+
+    // Header seed readout
+    setTxt('header-seed-code', `T-${state.terrainSeed} // S-${state.settlementSeed}`);
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('swiss-toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('visible');
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => {
+      toast.classList.remove('visible');
+    }, 2600);
+  }
+
+  function exportArchitecturalSheetPNG() {
+    // Render a fresh frame
+    const wasProbeVisible = probeMarkerGroup.visible;
+    probeMarkerGroup.visible = false;
+    renderer.render(scene, activeCamera);
+    probeMarkerGroup.visible = wasProbeVisible;
+
+    const glCanvas = renderer.domElement;
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = glCanvas.width;
+    outCanvas.height = glCanvas.height;
+    const ctx = outCanvas.getContext('2d');
+
+    // 1. Draw 3D WebGL scene
+    ctx.drawImage(glCanvas, 0, 0);
+
+    // 2. Overlay Swiss International Architectural Title Block Frame
+    const w = outCanvas.width;
+    const h = outCanvas.height;
+    const pad = Math.round(Math.min(w, h) * 0.028);
+
+    ctx.strokeStyle = '#141413';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(pad, pad, w - pad * 2, h - pad * 2);
+
+    // Bottom architectural title bar
+    const barH = Math.max(54, Math.round(h * 0.068));
+    ctx.fillStyle = 'rgba(243, 242, 238, 0.94)';
+    ctx.fillRect(pad, h - pad - barH, w - pad * 2, barH);
+    ctx.strokeRect(pad, h - pad - barH, w - pad * 2, barH);
+
+    // Red Swiss square badge
+    ctx.fillStyle = '#FF331F';
+    ctx.fillRect(pad + 14, h - pad - barH + 14, barH - 28, barH - 28);
+
+    // Title block text
+    ctx.fillStyle = '#141413';
+    ctx.font = `700 ${Math.max(13, Math.round(barH * 0.28))}px "Inter", "Noto Sans SC", sans-serif`;
+    ctx.fillText('TERRAIN / 01 — 山地聚落生长实验室', pad + barH, h - pad - barH * 0.54);
+
+    ctx.fillStyle = '#575652';
+    ctx.font = `500 ${Math.max(10, Math.round(barH * 0.2))}px "JetBrains Mono", monospace`;
+    const metaLine = `SEED: T-${state.terrainSeed}/S-${state.settlementSeed}   |   RELIEF: ${state.relief}m   |   MAX SLOPE: ${state.maxSlope}°   |   UNITS: ${state.buildings.length}/${state.targetCount}   |   SPACING: ${state.minSpacing}m   |   SCALE 1:1000`;
+    ctx.fillText(metaLine, pad + barH, h - pad - barH * 0.2);
+
+    const dataUrl = outCanvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = `TERRAIN-01_SEED-${state.terrainSeed}-${state.settlementSeed}.png`;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast('已导出高清建筑分析图纸 PNG // HD SHEET EXPORTED');
+  }
+
+  // ============================================================================
+  // 12. EVENT LISTENERS & INITIALIZATION
+  // ============================================================================
+  function bindUIControls() {
+    // Archetype buttons
+    document.querySelectorAll('.archetype-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.archetype-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.archetype = btn.dataset.archetype;
+        generateTerrainData();
+        buildTerrainMeshes();
+        generateSettlement();
+        showToast(`切换地貌原型: ${btn.dataset.archetype.toUpperCase()}`);
+      });
+    });
+
+    // Terrain sliders
+    const sliderRelief = document.getElementById('slider-relief');
+    if (sliderRelief) {
+      sliderRelief.addEventListener('input', (e) => {
+        state.relief = parseFloat(e.target.value);
+        generateTerrainData();
+        buildTerrainMeshes();
+        generateSettlement();
+      });
+    }
+
+    const sliderRoughness = document.getElementById('slider-roughness');
+    if (sliderRoughness) {
+      sliderRoughness.addEventListener('input', (e) => {
+        state.roughness = parseFloat(e.target.value);
+        generateTerrainData();
+        buildTerrainMeshes();
+        generateSettlement();
+      });
+    }
+
+    // Settlement constraint sliders
+    const sliderSlope = document.getElementById('slider-max-slope');
+    if (sliderSlope) {
+      sliderSlope.addEventListener('input', (e) => {
+        state.maxSlope = parseFloat(e.target.value);
+        generateTerrainData();
+        if (state.slopeAnalysisMode) updateTerrainVertexColors();
+        generateSettlement();
+      });
+    }
+
+    const sliderCount = document.getElementById('slider-target-count');
+    if (sliderCount) {
+      sliderCount.addEventListener('input', (e) => {
+        state.targetCount = parseInt(e.target.value, 10);
+        generateSettlement();
+      });
+    }
+
+    const sliderSpacing = document.getElementById('slider-min-spacing');
+    if (sliderSpacing) {
+      sliderSpacing.addEventListener('input', (e) => {
+        state.minSpacing = parseFloat(e.target.value);
+        generateSettlement();
+      });
+    }
+
+    const sliderDensity = document.getElementById('slider-cluster-density');
+    if (sliderDensity) {
+      sliderDensity.addEventListener('input', (e) => {
+        state.clusterDensity = parseFloat(e.target.value);
+        generateSettlement();
+      });
+    }
+
+    // Slope Analysis Toggle
+    const btnSlopeAnalysis = document.getElementById('btn-slope-analysis');
+    if (btnSlopeAnalysis) {
+      btnSlopeAnalysis.addEventListener('click', () => {
+        state.slopeAnalysisMode = !state.slopeAnalysisMode;
+        btnSlopeAnalysis.classList.toggle('active', state.slopeAnalysisMode);
+        const badge = document.getElementById('slope-mode-badge');
+        if (badge) badge.textContent = state.slopeAnalysisMode ? 'ON [开启]' : 'OFF [关闭]';
+        updateTerrainVertexColors();
+        buildMarchingSquaresContours();
+        showToast(
+          state.slopeAnalysisMode
+            ? '已开启实时坡度分析热力模式 // SLOPE DIAGNOSTIC ON'
+            : '已切换至瑞士极简白模视图 // ARCHITECTURAL MODEL VIEW'
+        );
+      });
+    }
+
+    // Layer Visibility Toggles
+    const btnToggleContours = document.getElementById('btn-toggle-contours');
+    if (btnToggleContours) {
+      btnToggleContours.addEventListener('click', () => {
+        state.showContours = !state.showContours;
+        btnToggleContours.classList.toggle('active', state.showContours);
+        if (minorContourLines) minorContourLines.visible = state.showContours;
+        if (majorContourLines) majorContourLines.visible = state.showContours;
+      });
+    }
+
+    const btnToggleWire = document.getElementById('btn-toggle-wireframe');
+    if (btnToggleWire) {
+      btnToggleWire.addEventListener('click', () => {
+        state.showWireframe = !state.showWireframe;
+        btnToggleWire.classList.toggle('active', state.showWireframe);
+        if (wireMesh) wireMesh.visible = state.showWireframe;
+      });
+    }
+
+    const btnToggleWalkways = document.getElementById('btn-toggle-walkways');
+    if (btnToggleWalkways) {
+      btnToggleWalkways.addEventListener('click', () => {
+        state.showWalkways = !state.showWalkways;
+        btnToggleWalkways.classList.toggle('active', state.showWalkways);
+        if (walkwayGroup) walkwayGroup.visible = state.showWalkways;
+      });
+    }
+
+    // Regenerate Terrain Button
+    const btnNewTerrain = document.getElementById('btn-new-terrain');
+    if (btnNewTerrain) {
+      btnNewTerrain.addEventListener('click', () => {
+        state.terrainSeed = Math.floor(1000 + Math.random() * 9000);
+        state.settlementSeed = Math.floor(1000 + Math.random() * 9000);
+        generateTerrainData();
+        buildTerrainMeshes();
+        generateSettlement();
+        showToast(`已生成新山地地形种子 // TERRAIN SEED #${state.terrainSeed}`);
+      });
+    }
+
+    // REMIX Button (Keeps current constraints & regenerates new settlement layout)
+    const btnRemix = document.getElementById('btn-remix-settlement');
+    if (btnRemix) {
+      btnRemix.addEventListener('click', () => {
+        state.settlementSeed = Math.floor(1000 + Math.random() * 9000);
+        generateSettlement();
+        showToast(`REMIX 聚落重排完成 // SETTLEMENT SEED #${state.settlementSeed}`);
+      });
+    }
+
+    // Replay Growth Animation Button
+    const btnReplayGrowth = document.getElementById('btn-replay-growth');
+    if (btnReplayGrowth) {
+      btnReplayGrowth.addEventListener('click', () => {
+        startGrowthAnimation();
+        showToast('正在重播山地聚落有机生长序列 // GROWTH SEQUENCE');
+      });
+    }
+
+    // Export Screenshot Button
+    const btnExport = document.getElementById('btn-export-png');
+    if (btnExport) {
+      btnExport.addEventListener('click', exportArchitecturalSheetPNG);
+    }
+
+    // Camera Presets
+    document.querySelectorAll('.hud-cam-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        setCameraPreset(btn.dataset.cam);
+      });
+    });
+
+    // Mobile drawer toggles
+    const btnMobileLeft = document.getElementById('btn-mobile-terrain');
+    const btnMobileRight = document.getElementById('btn-mobile-settlement');
+    const panelLeft = document.getElementById('panel-left');
+    const panelRight = document.getElementById('panel-right');
+    if (btnMobileLeft && panelLeft) {
+      btnMobileLeft.addEventListener('click', () => {
+        panelLeft.classList.toggle('collapsed-mobile');
+        if (panelRight) panelRight.classList.add('collapsed-mobile');
+      });
+    }
+    if (btnMobileRight && panelRight) {
+      btnMobileRight.addEventListener('click', () => {
+        panelRight.classList.toggle('collapsed-mobile');
+        if (panelLeft) panelLeft.classList.add('collapsed-mobile');
+      });
+    }
+  }
+
+  function onWindowResize() {
+    const container = document.getElementById('canvas-container');
+    if (!container || !renderer || !perspCamera) return;
+    const w = container.clientWidth || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+    perspCamera.aspect = w / h;
+    perspCamera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+
+  function animate(now) {
+    requestAnimationFrame(animate);
+    updateGrowthAnimation(now);
+    updateCameraTransform();
+    renderer.render(scene, activeCamera);
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    initThreeScene();
+    bindUIControls();
+    generateTerrainData();
+    buildTerrainMeshes();
+    generateSettlement();
+    requestAnimationFrame(animate);
+  });
+})();
+
+</script>
+</body>
+</html>
